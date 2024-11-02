@@ -8,51 +8,6 @@
 import Foundation
 import AppKit
 
-struct Folder: Hashable, Identifiable {
-    let url: URL
-    let metadata: MCMMetadata
-
-    var id: URL { url }
-    var name: String {
-        if let applicationURL,
-           let bundle = Bundle(url: applicationURL),
-           let appName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String {
-            return appName
-        }
-        return url.lastPathComponent
-    }
-
-    var icon: NSImage {
-        guard let applicationURL else {
-            return NSWorkspace.shared.icon(for: .folder)
-        }
-        return NSWorkspace.shared.icon(forFile: applicationURL.path())
-    }
-
-    private var bundleIdentifier: String {
-        let components = metadata.identifier.components(separatedBy: ".")
-        guard components.count > 3 else { return metadata.identifier }
-        return components.prefix(3).joined(separator: ".")
-    }
-
-    private var applicationURL: URL? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(url)
-    }
-}
-
-struct MCMMetadata: Equatable, Decodable {
-    let identifier: String
-
-    enum CodingKeys: String, CodingKey {
-        case identifier = "MCMMetadataIdentifier"
-    }
-}
-
 @Observable
 final class CleanerViewModel {
     let path = FileManager.default.homeDirectoryForCurrentUser.appending(
@@ -75,7 +30,7 @@ final class CleanerViewModel {
             options: .skipsHiddenFiles
         ) else { return }
 
-        allFolders = try contents.compactMap { url in
+        let folders: [Folder] = try contents.compactMap { url in
             if url.lastPathComponent.hasPrefix("com.apple") { return nil }
             let plistURL = url.appending(component: ".com.apple.containermanagerd.metadata.plist")
             let data = try Data(contentsOf: plistURL)
@@ -86,6 +41,8 @@ final class CleanerViewModel {
                 throw CleanerError.metadataDecodeFailed
             }
         }
+
+        allFolders = folders.sorted()
     }
 
     func search(_ text: String) {
